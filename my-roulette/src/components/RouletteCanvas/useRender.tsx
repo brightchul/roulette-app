@@ -13,10 +13,12 @@ import {
 } from "../../utils";
 
 const ANGLE_OFFSET = -90;
-const RAF_NONE = -1;
 const MAX_DEGREE = 360;
 const MIN_VERLOCITY = 0.002;
 const MAX_RUNNING_VERLOCITY = 10;
+const BASE_TIME = 1900;
+const INTERVAL_TIME = 100;
+const SELECT_ANGLE = MAX_DEGREE + ANGLE_OFFSET;
 
 function getPos(
   x: number,
@@ -57,45 +59,42 @@ function writeText(
   ctx.rotate(radian);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  ctx.font = "15px Arial";
   ctx.fillText(text, 0, 0);
   ctx.restore();
 }
 
+function getCanvasCtx() {
+  const canvas: HTMLCanvasElement | null = document.querySelector("#canvas");
+  return canvas?.getContext("2d") ?? null;
+}
+
 export default function useRender(angle: number) {
   const angleRef = useRef<number>(angle);
-  const rafRef = useRef<number>(RAF_NONE);
-  const canvasRef = useRef<null | HTMLCanvasElement>(null);
+  let raf = -1;
+  const elementsData = useAtomValue(elementsAtom);
+
+  const startTimeRef = useRef<number>(0);
   const stopFlagRef = useRef<boolean>(false);
-  const elements = useAtomValue(elementsAtom);
-  const startTImeRef = useRef<number>(0);
   const isStopCheckFlag = useRef<boolean>(true);
 
   useEffect(() => {
-    canvasRef.current = document.querySelector("#canvas");
-  }, []);
-
-  function getCtx() {
-    return canvasRef.current?.getContext("2d") ?? null;
-  }
-
-  useEffect(() => {
-    const ctx = getCtx();
-    if (!ctx) return;
-    drawRoulette(elements, angleRef.current, ctx);
-  }, [canvasRef, elements]);
+    const ctx = getCanvasCtx();
+    ctx && drawRoulette(elementsData, angleRef.current, ctx);
+  }, [elementsData]);
 
   let verlocity = MAX_RUNNING_VERLOCITY;
 
   const runAnimation = (timestamp = 0) => {
-    const ctx = getCtx()!;
+    const ctx = getCanvasCtx()!;
 
     // stop logic
     if (stopFlagRef.current) {
-      const elapsedTime = timestamp - startTImeRef.current;
+      const elapsedTime = timestamp - startTimeRef.current;
       verlocity = decelerateSpeed(
         MAX_RUNNING_VERLOCITY,
         elapsedTime,
-        getRandomTime(1900, 100)
+        getRandomTime(BASE_TIME, INTERVAL_TIME)
       );
     }
 
@@ -108,8 +107,8 @@ export default function useRender(angle: number) {
     angleRef.current =
       nextAngel > MAX_DEGREE ? nextAngel - MAX_DEGREE : nextAngel;
 
-    drawRoulette(elements, angleRef.current, ctx);
-    rafRef.current = requestAnimationFrame(runAnimation);
+    drawRoulette(elementsData, angleRef.current, ctx);
+    raf = requestAnimationFrame(runAnimation);
   };
 
   const runRoulette = () => {
@@ -123,12 +122,12 @@ export default function useRender(angle: number) {
   const stopRoulette = () => {
     if (!(isStopCheckFlag.current === false && stopFlagRef.current === false))
       return;
-    startTImeRef.current = Number(document.timeline.currentTime);
+    startTimeRef.current = Number(document.timeline.currentTime);
     stopFlagRef.current = true;
   };
 
   const stopAnimation = () => {
-    cancelAnimationFrame(rafRef.current);
+    cancelAnimationFrame(raf);
     isStopCheckFlag.current = true;
   };
 
@@ -141,7 +140,7 @@ export default function useRender(angle: number) {
 }
 
 function drawRoulette(
-  elements: elementsData[],
+  elementsData: elementsData[],
   angle: number,
   ctx: CanvasRenderingContext2D
 ) {
@@ -150,17 +149,18 @@ function drawRoulette(
   const centerX = ctx.canvas.width / 2;
   const centerY = ctx.canvas.height / 2;
 
-  const total = sum(...elements.map(({ amount }) => amount));
+  const total = sum(...elementsData.map(({ amount }) => amount));
 
-  const radius = min(centerX, centerY);
+  const radius = min(centerX, centerY) - 30;
 
   ctx.fillStyle = "#000";
 
   let startAngle = angle + ANGLE_OFFSET;
+  let selectedTitle = "";
 
-  elements.forEach(({ amount, title }) => {
+  elementsData.forEach(({ amount, title }) => {
     const ratio = amount / total;
-    const endAngle = startAngle + 360 * ratio;
+    const endAngle = startAngle + MAX_DEGREE * ratio;
 
     const startRad = degreeToRadian(startAngle);
     const endRad = degreeToRadian(endAngle);
@@ -170,6 +170,29 @@ function drawRoulette(
     drawArc(centerX, centerY, radius, startRad, endRad, ctx);
     writeText(title, halfX, halfY, halfRadian, ctx);
 
+    if (startAngle <= SELECT_ANGLE && SELECT_ANGLE <= endAngle) {
+      selectedTitle = title;
+    }
+
     startAngle = endAngle;
   });
+
+  drawSelectTriangle(10, 20, ctx);
+  writeText(selectedTitle, centerX, 10, 0, ctx);
+}
+
+function drawSelectTriangle(
+  width: number,
+  height: number,
+  ctx: CanvasRenderingContext2D
+) {
+  const centerWidth = ctx.canvas.width / 2;
+  const startY = 20;
+
+  ctx.beginPath();
+  ctx.moveTo(centerWidth - width / 2, startY);
+  ctx.lineTo(centerWidth + width / 2, startY);
+  ctx.lineTo(centerWidth, startY + height);
+  ctx.closePath();
+  ctx.stroke();
 }
