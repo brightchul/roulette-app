@@ -1,3 +1,18 @@
+export const mathLog = Math.log;
+export const mathExp = Math.exp;
+export const mathSin = Math.sin;
+export const mathCos = Math.cos;
+export const random = Math.random;
+export const min = Math.min;
+
+export function degreeToRadian(degree: number) {
+  return (degree * Math.PI) / 180;
+}
+
+export function getRandomTime(baseTime: number, interval: number) {
+  return baseTime + random() * interval;
+}
+
 export function sum(...values: unknown[]) {
   let result = 0;
   for (let index = 0; index < values.length; index++) {
@@ -13,12 +28,8 @@ export function decelerateSpeed(
   timeElapsed: number,
   totalTime: number
 ) {
-  // 총 시간
-  const accelerationConstant = Math.log(1 / initialSpeed) / totalTime; // 로그 함수에 기반한 감속 상수
-
-  // 현재 시간에 따른 속도 계산
-  const currentSpeed =
-    initialSpeed * Math.exp(accelerationConstant * timeElapsed);
+  const deceleration = mathLog(1 / initialSpeed) / totalTime;
+  const currentSpeed = initialSpeed * mathExp(deceleration * timeElapsed);
 
   return currentSpeed;
 }

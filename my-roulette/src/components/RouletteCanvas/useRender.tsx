@@ -2,17 +2,21 @@ import { useAtomValue } from "jotai";
 import { useEffect, useRef } from "react";
 
 import { elementsAtom, elementsData } from "../../models/store/atoms";
-import { decelerateSpeed, sum } from "../../utils";
+import {
+  decelerateSpeed,
+  degreeToRadian,
+  getRandomTime,
+  mathCos,
+  mathSin,
+  min,
+  sum,
+} from "../../utils";
 
 const ANGLE_OFFSET = -90;
 const RAF_NONE = -1;
-
-export function degToRad(degree: number) {
-  return (degree * Math.PI) / 180;
-}
-
-const mathSin = Math.sin;
-const mathCos = Math.cos;
+const MAX_DEGREE = 360;
+const MIN_VERLOCITY = 0.002;
+const MAX_RUNNING_VERLOCITY = 10;
 
 function getPos(
   x: number,
@@ -38,7 +42,6 @@ function drawArc(
   ctx.arc(x, y, radius, startRad, endRad);
 
   ctx.closePath();
-  // ctx.fill();
   ctx.stroke();
 }
 
@@ -62,47 +65,71 @@ export default function useRender(angle: number) {
   const angleRef = useRef<number>(angle);
   const rafRef = useRef<number>(RAF_NONE);
   const canvasRef = useRef<null | HTMLCanvasElement>(null);
+  const stopFlagRef = useRef<boolean>(false);
   const elements = useAtomValue(elementsAtom);
+  const startTImeRef = useRef<number>(0);
+  const isStopCheckFlag = useRef<boolean>(true);
 
   useEffect(() => {
     canvasRef.current = document.querySelector("#canvas");
   }, []);
 
-  useEffect(() => {
-    if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext("2d")!;
-    drawRoulette(elements, angle, ctx);
-  }, [canvasRef, elements, angle]);
+  function getCtx() {
+    return canvasRef.current?.getContext("2d") ?? null;
+  }
 
-  let verlocity = 10;
+  useEffect(() => {
+    const ctx = getCtx();
+    if (!ctx) return;
+    drawRoulette(elements, angleRef.current, ctx);
+  }, [canvasRef, elements]);
+
+  let verlocity = MAX_RUNNING_VERLOCITY;
 
   const runAnimation = (timestamp = 0) => {
-    if (!canvasRef.current) return;
+    const ctx = getCtx()!;
 
-    const ctx = canvasRef.current.getContext("2d")!;
-    verlocity = decelerateSpeed(10, timestamp, 2000);
+    // stop logic
+    if (stopFlagRef.current) {
+      const elapsedTime = timestamp - startTImeRef.current;
+      verlocity = decelerateSpeed(
+        MAX_RUNNING_VERLOCITY,
+        elapsedTime,
+        getRandomTime(1900, 100)
+      );
+    }
 
-    if (verlocity <= 0.001) {
+    // stop logic
+    if (verlocity <= MIN_VERLOCITY) {
       return stopAnimation();
     }
+
     const nextAngel = angleRef.current + verlocity;
-    angleRef.current = nextAngel > 360 ? nextAngel - 360 : nextAngel;
+    angleRef.current =
+      nextAngel > MAX_DEGREE ? nextAngel - MAX_DEGREE : nextAngel;
 
     drawRoulette(elements, angleRef.current, ctx);
     rafRef.current = requestAnimationFrame(runAnimation);
   };
 
   const runRoulette = () => {
+    if (!isStopCheckFlag.current) return;
+    isStopCheckFlag.current = false;
+    stopFlagRef.current = false;
     verlocity = 10;
     runAnimation();
   };
 
   const stopRoulette = () => {
-    runAnimation();
+    if (!(isStopCheckFlag.current === false && stopFlagRef.current === false))
+      return;
+    startTImeRef.current = Number(document.timeline.currentTime);
+    stopFlagRef.current = true;
   };
 
   const stopAnimation = () => {
     cancelAnimationFrame(rafRef.current);
+    isStopCheckFlag.current = true;
   };
 
   return {
@@ -125,7 +152,7 @@ function drawRoulette(
 
   const total = sum(...elements.map(({ amount }) => amount));
 
-  const radius = Math.min(centerX, centerY);
+  const radius = min(centerX, centerY);
 
   ctx.fillStyle = "#000";
 
@@ -135,9 +162,9 @@ function drawRoulette(
     const ratio = amount / total;
     const endAngle = startAngle + 360 * ratio;
 
-    const startRad = degToRad(startAngle);
-    const endRad = degToRad(endAngle);
-    const halfRadian = degToRad((startAngle + endAngle) / 2);
+    const startRad = degreeToRadian(startAngle);
+    const endRad = degreeToRadian(endAngle);
+    const halfRadian = degreeToRadian((startAngle + endAngle) / 2);
     const [halfX, halfY] = getPos(centerX, centerY, radius / 2, halfRadian);
 
     drawArc(centerX, centerY, radius, startRad, endRad, ctx);

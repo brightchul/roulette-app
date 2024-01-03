@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import useRender, { degToRad } from "./useRander";
+import { useEffect } from "react";
+
 import { useToggle } from "../../hooks";
+import useRender from "./useRender";
 
 interface RouletteCanvasProps {
   width?: string;
